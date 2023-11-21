@@ -1,0 +1,174 @@
+#include "includes.h"
+
+// Factor for converting radian to degree
+#define ARC_TO_DEG 57.295780f
+
+// Proportional gain governs rate of convergence to accelerometer/magnetometer
+#define Kp 10.0f
+// Integral gain governs rate of convergence of gyroscope biases
+#define Ki 0.008f//0.005f
+
+// Quaternion
+float q0, q1, q2, q3;
+// Integral correction
+float exInt = 0, eyInt = 0, ezInt = 0;
+// Euler angles
+float Pitch, Roll, Yaw;
+// Half of the update time of AHRS
+float halfT;
+// Yaw initial heading
+float heading;
+
+// Faster computing algorithm for expression "1.0 / sqrt(value)" (four times faster), written by John Carmack
+float invSqrt(float x) 
+{
+    float halfx = 0.5f * x;
+    float y = x;
+    long i = *(long*)&y;
+    i = 0x5f3759df - (i>>1);
+    y = *(float*)&i;
+    y = y * (1.5f - (halfx * y * y));
+    return y;
+}
+
+// Quaternion initialization
+void Quat_Init(void)
+{
+    int16_t accel[3];
+    uint8_t data_write[6];
+    
+    // Euler angles value in the initial state
+    float init_Yaw, init_Pitch, init_Roll;
+
+    // Get sensor data
+    if(!i2cread(MPU6050_Addr, ACCEL_XOUT_H, 6, data_write))
+    {
+        accel[0] = ((((int16_t)data_write[0])<<8) | data_write[1]);
+        accel[1] = ((((int16_t)data_write[2])<<8) | data_write[3]);
+        accel[2] = ((((int16_t)data_write[4])<<8) | data_write[5]);
+
+        // Get acceleration data
+        init_ax = (float)(accel[0] - Accel_Xout_Offset) / Accel_4_Scale_Factor;
+        init_ay = (float)(accel[1] - Accel_Yout_Offset) / Accel_4_Scale_Factor;
+        init_az = (float)(accel[2] + (Accel_4_Scale_Factor - Accel_Zout_Offset)) / Accel_4_Scale_Factor;
+        
+        if(!i2cread(HMC5883L_Addr2, HMC5883L_XOUT_MSB, 6, data_write))
+        {
+            init_mx = (data_write[0] << 8) | data_write[1];
+            init_my = (data_write[4] << 8) | data_write[5];
+            init_mz = (data_write[2] << 8) | data_write[3];
+
+            if(init_mx > 0x7fff) init_mx-=0xffff;
+            if(init_my > 0x7fff) init_my-=0xffff;
+            if(init_mz > 0x7fff) init_mz-=0xffff;
+            
+            // Get magnetic flux data
+            init_mx /= 1090.0f;
+            init_my /= 1090.0f;
+            init_mz /= 1090.0f;
+            
+            // Initial value of euler angles when Y axis forward
+            init_Roll  = 0.0;
+            init_Pitch = 0.0;
+            init_Yaw   = atan2(init_mx*cos(init_Roll) + init_my*sin(init_Roll)*sin(init_Pitch) + init_mz*sin(init_Roll)*cos(init_Pitch),
+                               init_my*cos(init_Pitch) - init_mz*sin(init_Pitch));
+
+            // Quaternion calculation
+            q0 = cos(0.5*init_Roll)*cos(0.5*init_Pitch)*cos(0.5*init_Yaw) + sin(0.5*init_Roll)*sin(0.5*init_Pitch)*sin(0.5*init_Yaw);  //w
+            q1 = cos(0.5*init_Roll)*sin(0.5*init_Pitch)*cos(0.5*init_Yaw) - sin(0.5*init_Roll)*cos(0.5*init_Pitch)*sin(0.5*init_Yaw);  //x Pitch
+            q2 = sin(0.5*init_Roll)*cos(0.5*init_Pitch)*cos(0.5*init_Yaw) + cos(0.5*init_Roll)*sin(0.5*init_Pitch)*sin(0.5*init_Yaw);  //y Roll
+            q3 = cos(0.5*init_Roll)*cos(0.5*init_Pitch)*sin(0.5*init_Yaw) - sin(0.5*init_Roll)*sin(0.5*init_Pitch)*cos(0.5*init_Yaw);  //z Yaw
+
+            // Converting radian to degree
+            init_Roll  = init_Roll * ARC_TO_DEG;
+            init_Pitch = init_Pitch * ARC_TO_DEG;
+            init_Yaw   = init_Yaw * ARC_TO_DEG;
+
+            // Get yaw initial heading
+            heading    = init_Yaw;
+        }
+    }
+}
+
+// AHRS Update algorithm, written by Mahony
+void AHRS_Update(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz) 
+{
+    float norm;
+    float vx, vy, vz;
+    float ex, ey, ez;
+    float q0_last, q1_last, q2_last;
+
+    //auxiliary variables to reduce number of repeated operations
+    float q0q0 = q0*q0;
+    float q0q1 = q0*q1;
+    float q0q2 = q0*q2;
+    float q0q3 = q0*q3;
+    float q1q1 = q1*q1;
+    float q1q2 = q1*q2;
+    float q1q3 = q1*q3;
+    float q2q2 = q2*q2;
+    float q2q3 = q2*q3;
+    float q3q3 = q3*q3;
+
+    //normalise the measurements
+    norm = invSqrt(ax*ax + ay*ay + az*az);
+    ax = ax * norm;
+    ay = ay * norm;
+    az = az * norm;
+   
+
+    // estimated direction of gravity and flux (v and w)
+    vx = 2*(q1q3 - q0q2);
+    vy = 2*(q0q1 + q2q3);
+    vz = q0q0 - q1q1 - q2q2 + q3q3;
+
+   
+
+    // error is sum of cross product between reference direction of fields and direction measured by sensors
+    ex = (ay*vz - az*vy);
+    ey = (az*vx - ax*vz);
+    ez = (ax*vy - ay*vx);
+
+    halfT = Get_AHRS_Time();
+
+    
+    // integral error scaled integral gain
+    exInt = exInt + ex*Ki ;
+    eyInt = eyInt + ey*Ki ;
+    ezInt = ezInt + ez*Ki ;
+
+    // adjusted gyroscope measurements
+    gx = gx + Kp*ex + exInt;
+    gy = gy + Kp*ey + eyInt;
+    gz = gz + Kp*ez + ezInt;
+    
+
+    // save quaternion
+    q0_last = q0;
+    q1_last = q1;
+    q2_last = q2;
+    
+    // integrate quaternion rate and normalise (Picard first order)
+    q0 = q0_last + (-q1_last*gx - q2_last*gy - q3*gz) * halfT;
+    q1 = q1_last + ( q0_last*gx + q2_last*gz - q3*gy) * halfT;
+    q2 = q2_last + ( q0_last*gy - q1_last*gz + q3*gx) * halfT;
+    q3 = q3 + ( q0_last*gz + q1_last*gy - q2_last*gx) * halfT;
+
+		
+    // normalise quaternion
+    norm = invSqrt(q0*q0 + q1*q1 + q2*q2 + q3*q3);
+    q0 = q0 * norm;    //w
+    q1 = q1 * norm;    //x
+    q2 = q2 * norm;    //y
+    q3 = q3 * norm;    //z
+
+    // Quaternion to euler angle
+    Roll  =  -asin(2*q0*q2 - 2*q1*q3) * ARC_TO_DEG;
+    Pitch =  atan2(2*q0*q1 + 2*q2*q3, 1 - 2*q1*q1 - 2*q2*q2) * ARC_TO_DEG;
+    Yaw   =  atan2(2*q1*q2 + 2*q0*q3, 1 - 2*q2*q2 - 2*q3*q3) * ARC_TO_DEG;
+
+    // Monitoring attitude change by ANO-Tech upper computer software
+    #ifdef ENABLE_UPPER_COM
+		SEND_OULA_ANGLE((short)(-Roll*100),(short)(Pitch*100),(short)(-Yaw*100));
+    #endif
+}

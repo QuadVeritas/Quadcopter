@@ -1,0 +1,11 @@
+.\objects\stm32f401ccu6_it.o: User\stm32f401ccu6_it.c
+.\objects\stm32f401ccu6_it.o: User\stm32f401ccu6_it.h
+.\objects\stm32f401ccu6_it.o: .\Periph\stm32f401ccu6.h
+.\objects\stm32f401ccu6_it.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdio.h
+.\objects\stm32f401ccu6_it.o: .\Core\core_stm32f401ccu6.h
+.\objects\stm32f401ccu6_it.o: .\Ports\os_cpu.h
+.\objects\stm32f401ccu6_it.o: .\Source\ucos_ii.h
+.\objects\stm32f401ccu6_it.o: .\Cfg\Template\app_cfg.h
+.\objects\stm32f401ccu6_it.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdarg.h
+.\objects\stm32f401ccu6_it.o: .\Cfg\Template\os_cfg.h
+.\objects\stm32f401ccu6_it.o: .\Source\os_trace.h

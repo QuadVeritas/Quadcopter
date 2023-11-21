@@ -1,0 +1,12 @@
+.\objects\os_start.o: Ports\os_start.c
+.\objects\os_start.o: Ports\os_cpu.h
+.\objects\os_start.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdbool.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include\stm32f4xx.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include\stm32f401xc.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\ARM\CMSIS\5.9.0\CMSIS\Core\Include\core_cm4.h
+.\objects\os_start.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdint.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\ARM\CMSIS\5.9.0\CMSIS\Core\Include\cmsis_version.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\ARM\CMSIS\5.9.0\CMSIS\Core\Include\cmsis_compiler.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\ARM\CMSIS\5.9.0\CMSIS\Core\Include\cmsis_armcc.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\ARM\CMSIS\5.9.0\CMSIS\Core\Include\mpu_armv7.h
+.\objects\os_start.o: D:\Keil\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include\system_stm32f4xx.h

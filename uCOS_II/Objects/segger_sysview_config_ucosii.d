@@ -1,0 +1,15 @@
+.\objects\segger_sysview_config_ucosii.o: SystemView\Sample\uCOS-II\Config\Cortex-M\SEGGER_SYSVIEW_Config_uCOSII.c
+.\objects\segger_sysview_config_ucosii.o: .\SystemView\SEGGER\SEGGER_SYSVIEW.h
+.\objects\segger_sysview_config_ucosii.o: .\SystemView\SEGGER\SEGGER.h
+.\objects\segger_sysview_config_ucosii.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdarg.h
+.\objects\segger_sysview_config_ucosii.o: .\SystemView\Config\Global.h
+.\objects\segger_sysview_config_ucosii.o: .\SystemView\SEGGER\SEGGER_SYSVIEW_ConfDefaults.h
+.\objects\segger_sysview_config_ucosii.o: .\SystemView\Config\SEGGER_SYSVIEW_Conf.h
+.\objects\segger_sysview_config_ucosii.o: .\SystemView\Config\SEGGER_RTT_Conf.h
+.\objects\segger_sysview_config_ucosii.o: .\Source\os.h
+.\objects\segger_sysview_config_ucosii.o: .\Source\ucos_ii.h
+.\objects\segger_sysview_config_ucosii.o: .\Cfg\Template\app_cfg.h
+.\objects\segger_sysview_config_ucosii.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdio.h
+.\objects\segger_sysview_config_ucosii.o: .\Cfg\Template\os_cfg.h
+.\objects\segger_sysview_config_ucosii.o: .\Ports\os_cpu.h
+.\objects\segger_sysview_config_ucosii.o: .\Source\os_trace.h
