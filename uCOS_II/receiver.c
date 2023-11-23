@@ -121,9 +121,9 @@ int GetUnlockSignal(void) {
 
 
 void TIM1_CC_IRQHandler(void){
+    OSIntEnter();
     int i;
     uint16_t TIM1SR;
-    OSIntEnter();
     TIM1SR = TIM1->SR;
     for(i = 1; i <= 4; ++i){
         if(!(TIM1_CH_CAPTURE_STA[i] & 0x80)){ // not capture yet

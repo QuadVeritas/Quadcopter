@@ -16,6 +16,7 @@ void MyTaskCreate(void (*task)(void *p_arg), void *p_arg, INT8U prio, INT16U stk
     OS_STK* ptos = OSStackAlloc(stkSize);
     OSTaskCreate(task, p_arg, ptos, prio);
     ptcb = OSTCBPrioTbl[prio];
+    ptcb->OSTCBOpt |= OS_TASK_OPT_STK_CHK;
     ptcb->OSTCBStkBottom = ptos;
     ptcb->OSTCBStkSize = stkSize;
     ptcb->OSTCBTaskName = (INT8U *)(void *)taskName;
@@ -24,7 +25,7 @@ void MyTaskCreate(void (*task)(void *p_arg), void *p_arg, INT8U prio, INT16U stk
 
 // definition of p_arg: p_arg[0] = argc, p_arg[1+] = argv
 OS_STK* OSTaskStkInit(void (*task)(void* p_arg), void* p_arg, OS_STK* ptos, INT16U opt){
-    OS_STK* pstk = ptos;
+    OS_STK* pstk = (OS_STK*) ((int) ptos / 8 * 8);
     opt = opt;
     /*
 #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)

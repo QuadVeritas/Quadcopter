@@ -97,6 +97,7 @@ void Receiver_Output(void*);
 void MotorControl(void*);
 void ListenPID(void*);
 
+void USART1_SEND_BUF_U8(u8* buf,u8 len);
 void SEND_OULA_ANGLE(short row,short pit,short yaw);
 
 #endif

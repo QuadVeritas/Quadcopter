@@ -70,7 +70,8 @@ int CommandParse() {
     while(idx < len) {
         if(usart_buf[idx] == ' ' || usart_buf[idx] == '#') {
             uint8_t l = pre + 1, r = idx - 1;
-            if('0' <= usart_buf[l] && usart_buf[l] <= '9') {
+            if(('0' <= usart_buf[l] && usart_buf[l] <= '9') || 
+               (usart_buf[l] == '-' && usart_buf[l + 1] >= '0' && usart_buf[l + 1] <= '9')) {
                 if(pParam == 0) return 1; // num without paramselect declaration
                 char* tmp = (char*) malloc((r - l + 1) * sizeof(char));
                 for(int i = l; i <= r; ++i)
@@ -137,7 +138,7 @@ void USART1_SEND_DATA_U8(u8 data)
     while(!(USART1->SR & 0x40));
 }
 
-void USART1_SEND_BUF_U8(u8*buf,u8 len)
+void USART1_SEND_BUF_U8(u8* buf,u8 len)
 {
 	while(len)
 	{

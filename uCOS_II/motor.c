@@ -6,14 +6,15 @@ void delay_ms(int nms){
 }
 
 void SetCCR(PWMData pwmData){
-	TIM3->CCR1&=~(0XFF);
-	TIM3->CCR2&=~(0XFF);
-	TIM3->CCR3&=~(0XFF);
-	TIM3->CCR4&=~(0XFF);
+	TIM3->CCR1 &= ~(0XFFFF);
+	TIM3->CCR2 &= ~(0XFFFF);
+	TIM3->CCR3 &= ~(0XFFFF);
+	TIM3->CCR4 &= ~(0XFFFF);
 	TIM3->CCR1 |= (short) pwmData.ccr1;
 	TIM3->CCR2 |= (short) pwmData.ccr2;
 	TIM3->CCR3 |= (short) pwmData.ccr3;
 	TIM3->CCR4 |= (short) pwmData.ccr4;
+    //printf("[CCR] (%d, %d, %d, %d)\r\n", TIM3->CCR1, TIM3->CCR2, TIM3->CCR3, TIM3->CCR4);
 }
 
 void MotorConfig(void){

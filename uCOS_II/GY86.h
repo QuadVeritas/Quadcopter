@@ -180,8 +180,13 @@ void MotorConfig(void);
 void MotorDebug(void);
 void SetCCR(PWMData);
 
-#define psc (1680 - 1) // 5Hz = 84MHz / (84 * 20000)
-#define arr (1000 - 1)
-#define ccr_max (900)
-#define ccr_min (950)
+#define psc (84 - 1)
+/*
+#define arr (20000 - 1)
+#define ccr_max (18000)
+#define ccr_min (19000)
+*/
+#define arr (2000 - 1)
+#define ccr_max (0)
+#define ccr_min (1000)
 #define ccr_mid ((ccr_max + ccr_min) / 2)

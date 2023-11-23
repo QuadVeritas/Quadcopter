@@ -1,23 +1,13 @@
 #include "includes.h"
 
-float af = 114514.0;
-float bf = 191981.0;
-
-void FloatTest(void* p_arg) {
-    p_arg = p_arg;
-    while(1) {
-        af += bf;
-        printf("%.2f\r\n", af);
-        OSTimeDly(100);
-    }
-}
-
 CtrlData initCtrlData;
 int unlocked = 0;
 int systemLocked = 1;
+char usart_tx_buf[256];
+
 
 void MotorUnlock(void* p_arg) {
-    printf("[MotorUnlock] Start\r\n");
+    puts("[MotorUnlock] Start");
     p_arg = p_arg;
     SetCCR((PWMData) {ccr_max, ccr_max, ccr_max, ccr_max});
     OSTimeDly(1000);
@@ -26,7 +16,7 @@ void MotorUnlock(void* p_arg) {
     SetCCR((PWMData) {ccr_min, ccr_min, ccr_min, ccr_min});
     OSTimeDly(1000);
     unlocked = 1;
-    printf("[MotorUnlock] End\r\n");
+    puts("[MotorUnlock] End");
     OSTaskDel(OS_PRIO_SELF);
 }
 
@@ -35,12 +25,13 @@ void MotorUnlock(void* p_arg) {
 */
 void StickCease(void* p_arg) {
     CtrlData newCtrlData;
-    printf("[StickCease] Start\r\n");
+    puts("[StickCease] Start");
     p_arg = p_arg;
     while(1) {
         if(unlocked == 1){
-            printf("[StickCease] End\r\n");
-            printf("ipit=%u, ipwr=%u, irol=%u, iyaw=%u\r\n", initCtrlData.pit, initCtrlData.pwr, initCtrlData.rol, initCtrlData.yaw);
+            puts("[StickCease] End");
+            sprintf(usart_tx_buf, "ipit=%d, ipwr=%d, irol=%d, iyaw=%d\r\n", initCtrlData.pit, initCtrlData.pwr, initCtrlData.rol, initCtrlData.yaw);
+            USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
             OSTaskDel(OS_PRIO_SELF);
         }
         OSTimeDly(100);
@@ -83,13 +74,13 @@ void GlobalInit(void* p_arg) {
     LED_Init();
     SysTickInit();
     USART1_Init(115200);
-    printf("\r\n------------------------\r\n");
-    printf("[GlobalInit] Start\r\n");
+    puts("\r\n------------------------");
+    puts("[GlobalInit] Start");
     GY86_Init();
     TIM1_Config();
     TIM2_Config();
     MotorConfig();
-    printf("[GlobalInit] Init complete\r\n");
+    puts("[GlobalInit] Init complete");
     /*
     MyTaskCreate(GuardTask, NULL, 2, 128, "GuardTask");
     
@@ -102,30 +93,30 @@ void GlobalInit(void* p_arg) {
     MyTaskCreate(StickCease, NULL, 4, 128, "StickCease");
     
     while(!unlocked){
-        printf("[GlobalInit] Waiting for MotorUnlock...\r\n");
+        puts("[GlobalInit] Waiting for MotorUnlock...");
         OSTimeDly(1000);
     }
-    //MyTaskCreate(FloatTest, NULL, 13, 128, "FloatTest");
     MyTaskCreate(LED, NULL, 62, 128, "LED");
     //MyTaskCreate(GY86_Output, NULL, 5, 128, "GY86Output");
     //MyTaskCreate(Receiver_Output, NULL, 6, 128, "ReceiverOutput");
-    MyTaskCreate(ListenPID, NULL, 3, 128, "ListenPID");
-    MyTaskCreate(MotorControl, NULL, 4, 128, "MotorControl");
+    MyTaskCreate(ListenPID, NULL, 61, 128, "ListenPID");
+    MyTaskCreate(MotorControl, NULL, 3, 128, "MotorControl");
     OSTaskDel(OS_PRIO_SELF);
 }
 
 
 void LED(void* p_arg){
     p_arg = p_arg;
-    printf("[LED] Start\r\n");
+    puts("[LED] Start");
     while(1){
+        //puts("[LED] Running...");
         GPIOA->ODR |= (1 << 5);
         OSTimeDly(1000);
         GPIOA->ODR &= ~(1 << 5);
         OSTimeDly(1000);
     }
 }
-
+/*
 void GY86_Output(void *p_arg){
     AttdData* pAttdData = (AttdData*) malloc(sizeof(AttdData));
     p_arg = p_arg;
@@ -152,7 +143,7 @@ void Receiver_Output(void *p_arg){
         OSTimeDly(100);
     }
 }
-
+*/
 /*      →     ←
        ↑4↓   ↓3↑
         ←\   /→
@@ -175,8 +166,13 @@ PWMData PIDOutput(PIDData* pExtData, PIDParam extParam, PIDData* pIntData, PIDPa
     pIntData->I -= intTarget;
     pIntData->D -= intTarget;
     float res = intParam.Kp * pIntData->P + intParam.Ki * pIntData->I + intParam.Kd * pIntData->D;
-    printf("[PIDCalc] extP100 = %d, intP100 = %d, res = %d\r\n"
-            , (int)(pExtData->P * 100.0), (int)(pIntData->P * 100.0), (int)(res * 100.0));
+    //float res = intTarget;
+    //OS_CPU_SR cpu_sr;
+    //OS_ENTER_CRITICAL();
+    sprintf(usart_tx_buf, "[PIDCalc] extP = %.2f, intP = %.2f, res = %.2f\r\n", pExtData->P, pIntData->P, res);
+    USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+    //printf("[PIDCalc] extP = %.2f, res = %.2f, intP = %.2f\r\n", pExtData->P, res, pIntData->P);
+    //OS_EXIT_CRITICAL();
     switch(attitude) {
         case PITCH: return (PWMData) {-res, -res, +res, +res};
         case ROLL:  return (PWMData) {-res, +res, -res, +res};
@@ -233,20 +229,23 @@ int CommandParse(void);
 void MotorControl(void* p_arg) {
     CtrlData ctrlData;
     AttdData attdData, tagAttdData;
-    #define ccr_init 932
+    #define ccr_init ((ccr_min + ccr_mid) / 2)
     PWMData pwmData = {ccr_init, ccr_init, ccr_init, ccr_init};
     SpeedData speedData;
-    int dh;
-    printf("[MotorControl] Start\r\n");
+    float dh;
+    puts("[MotorControl] Start");
     p_arg = p_arg;
     while(1) {
-        GetAttdData(&attdData); // 得到的数据为float，输出时需要转为整数输出，以避免C标准栈对齐问题
+        //OS_CPU_SR cpu_sr;
+        //puts("[MotorControl] Running...");
+        GetAttdData(&attdData);
         GetReceiverData(&ctrlData);
         GetSpeedData(&speedData);
+        attdData.pitch = -attdData.pitch;
         tagAttdData.pitch = -(ctrlData.pit - initCtrlData.pit) * 90.0 / 500.0; // 符号问题？
         tagAttdData.roll = (ctrlData.rol - initCtrlData.rol) * 90.0 / 500.0;
         tagAttdData.yaw = (ctrlData.yaw - initCtrlData.yaw) * 180.0 / 500.0;
-        dh = (ctrlData.pwr - initCtrlData.pwr) / 50;
+        dh = (ctrlData.pwr - initCtrlData.pwr) * (ccr_min - ccr_max) / 1000.0;
         PIDDataRoll(&pitchData, attdData.pitch - tagAttdData.pitch);
         PIDDataRoll(&rollData,  attdData.roll - tagAttdData.roll);
         PIDDataRoll(&yawData,   attdData.yaw - tagAttdData.yaw);
@@ -255,18 +254,19 @@ void MotorControl(void* p_arg) {
         PIDDataRoll(&yawSpeedData,   speedData.yawspeed);
         
         PWMData pitchPWMData = PIDOutput(&pitchData, pitchParam, &pitchSpeedData, pitchSpeedParam, PITCH);
-        /*
-        PWMData rollPWMData = PIDOutput(&rollData, rollParam, &rollSpeedData, rollSpeedParam, ROLL);
-        PWMData yawPWMData = PIDOutput(&yawData, yawParam, &yawSpeedData, yawSpeedParam, YAW);
+//        PWMData rollPWMData = PIDOutput(&rollData, rollParam, &rollSpeedData, rollSpeedParam, ROLL);
+//        PWMData yawPWMData = PIDOutput(&yawData, yawParam, &yawSpeedData, yawSpeedParam, YAW);
         PWMData pwrPWMData = (PWMData) {-dh, -dh, -dh, -dh};
-        pwmData = Add(Add(Add(pwmData, pitchPWMData), Add(rollPWMData, yawPWMData)), pwrPWMData);
-        */
-        SetCCR(Add(pwmData, pitchPWMData));
+//        pwmData = Add(Add(Add(pwmData, pitchPWMData), Add(rollPWMData, yawPWMData)), pwrPWMData);
+        
+        PWMData tmp = Add(Add(pwmData, pitchPWMData), pwrPWMData);
+        //PWMData tmp = Add(pwmData, pwrPWMData);
+        SetCCR(tmp);
         //printf("pitv=%d rolv=%d yawv=%d\r\r\n", speedData.pitchspeed, speedData.rollspeed, speedData.yawspeed);
-        //printf("[MotorControl] %d, (%d, %d, %d, %d)\r\r\n", (int)(tagAttdData.pitch * 100.0), tmp.ccr1, tmp.ccr2, tmp.ccr3, tmp.ccr4);
+        //printf("[MotorControl] (%.2f, %.2f, %.2f, %.2f)\r\n", tmp.ccr1, tmp.ccr2, tmp.ccr3, tmp.ccr4);
         //printf("pitchPID: %d %d %d\r\n", (int)roundf(pitchParam.Kp * 100.0), (int)roundf(pitchParam.Ki * 100.0), (int)roundf(pitchParam.Kd * 100.0));
         //printf("pitchPID: %.2f %.2f %.2f\r\n", 1.14, 5.14, 1.919);
-        OSTimeDly(20);
+        OSTimeDly(50);
     }
 }
 
@@ -274,21 +274,28 @@ void ListenPID(void* p_arg) {
     p_arg = p_arg;
     extern char usart_buf[256];
     extern uint16_t usart_buf_sta;
-    printf("[ListenPID] Start\r\n");
+    puts("[ListenPID] Start");
     while(1) {
+        //OS_CPU_SR cpu_sr;
+        //puts("[ListenPID] Running...");
         if(usart_buf_sta & 0x8000) {
             int ret = CommandParse();
             if(!ret) {
-                printf("[ListenPID] Command '%s' Executed\r\n", usart_buf);
+                //printf("[ListenPID] Command '%s' Executed\r\n", usart_buf);
+                puts("[ListenPID] Command Executed");
+                /*
                 printf("[ListenPID] PID = [%d, %d, %d]\r\n", (int)roundf(pitchParam.Kp * 100.0), (int)roundf(pitchParam.Ki * 100.0), (int)roundf(pitchParam.Kd * 100.0));
                 printf("                              [%d, %d, %d]\r\n", (int)roundf(rollParam.Kp * 100.0), (int)roundf(rollParam.Ki * 100.0), (int)roundf(rollParam.Kd * 100.0));
                 printf("                              [%d, %d, %d]\r\n", (int)roundf(yawParam.Kp * 100.0), (int)roundf(yawParam.Ki * 100.0), (int)roundf(yawParam.Kd * 100.0));
                 printf("                              [%d, %d, %d]\r\n", (int)roundf(pitchSpeedParam.Kp * 100.0), (int)roundf(pitchSpeedParam.Ki * 100.0), (int)roundf(pitchSpeedParam.Kd * 100.0));
                 printf("                              [%d, %d, %d]\r\n", (int)roundf(rollSpeedParam.Kp * 100.0), (int)roundf(rollSpeedParam.Ki * 100.0), (int)roundf(rollSpeedParam.Kd * 100.0));
                 printf("                              [%d, %d, %d]\r\n", (int)roundf(yawSpeedParam.Kp * 100.0), (int)roundf(yawSpeedParam.Ki * 100.0), (int)roundf(yawSpeedParam.Kd * 100.0));
-                
+                */
             }
-            else printf("[ListenPID] Invalid Command '%s'\r\n", usart_buf);
+            else {
+                //printf("[ListenPID] Invalid Command '%s'\r\n", usart_buf);
+                puts("[ListenPID] Invalid Command");
+            }
             usart_buf_sta = 0;
             memset(usart_buf, 0, sizeof(usart_buf));
             pitchData = (PIDData) {0, 0, 0};
