@@ -30,8 +30,10 @@ void StickCease(void* p_arg) {
     while(1) {
         if(unlocked == 1){
             puts("[StickCease] End");
+            /*
             sprintf(usart_tx_buf, "ipit=%d, ipwr=%d, irol=%d, iyaw=%d\r\n", initCtrlData.pit, initCtrlData.pwr, initCtrlData.rol, initCtrlData.yaw);
             USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+            */
             OSTaskDel(OS_PRIO_SELF);
         }
         OSTimeDly(100);
@@ -76,11 +78,12 @@ void GlobalInit(void* p_arg) {
     USART1_Init(115200);
     puts("\r\n------------------------");
     puts("[GlobalInit] Start");
-    GY86_Init();
     TIM1_Config();
     TIM2_Config();
     MotorConfig();
     puts("[GlobalInit] Init complete");
+    I2C1_Init();
+    MPU6050_Init();
     /*
     MyTaskCreate(GuardTask, NULL, 2, 128, "GuardTask");
     
@@ -91,11 +94,16 @@ void GlobalInit(void* p_arg) {
     */
     MyTaskCreate(MotorUnlock, NULL, 3, 128, "MotorUnlock");
     MyTaskCreate(StickCease, NULL, 4, 128, "StickCease");
+    MyTaskCreate(Get_Gyro_Bias, NULL, 5, 128, "GyroBias");
+    MyTaskCreate(Get_Accel_Bias, NULL, 6, 128, "AccelBias");
     
     while(!unlocked){
         puts("[GlobalInit] Waiting for MotorUnlock...");
         OSTimeDly(1000);
     }
+    HMC5883L_Init();
+    AHRS_Time_Init();
+    Quat_Init();
     MyTaskCreate(LED, NULL, 62, 128, "LED");
     //MyTaskCreate(GY86_Output, NULL, 5, 128, "GY86Output");
     //MyTaskCreate(Receiver_Output, NULL, 6, 128, "ReceiverOutput");
@@ -159,18 +167,30 @@ void Receiver_Output(void *p_arg){
       YAW    -++-
 */
 
+int cnt = 0;
+
+#define T_SAMPLE (0.01f)
+
 // pIntData's errN is actually the current value of the target
 PWMData PIDOutput(PIDData* pExtData, PIDParam extParam, PIDData* pIntData, PIDParam intParam, Attitude attitude) {
     float intTarget = extParam.Kp * pExtData->P + extParam.Ki * pExtData->I + extParam.Kd * pExtData->D;
     pIntData->P -= intTarget;
-    pIntData->I -= intTarget;
+    pIntData->I -= intTarget * T_SAMPLE;
     pIntData->D -= intTarget;
     float res = intParam.Kp * pIntData->P + intParam.Ki * pIntData->I + intParam.Kd * pIntData->D;
     //float res = intTarget;
     //OS_CPU_SR cpu_sr;
     //OS_ENTER_CRITICAL();
-    sprintf(usart_tx_buf, "[PIDCalc] extP = %.2f, intP = %.2f, res = %.2f\r\n", pExtData->P, pIntData->P, res);
-    USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+    /*
+    cnt++;
+    if(cnt == 10) {
+    */
+        sprintf(usart_tx_buf, "[PIDCalc] extP = %.2f, intP = %.2f, res = %.2f\r\n", pExtData->P, pIntData->P, res);
+        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+    /*
+        cnt = 0;
+    }
+    */
     //printf("[PIDCalc] extP = %.2f, res = %.2f, intP = %.2f\r\n", pExtData->P, res, pIntData->P);
     //OS_EXIT_CRITICAL();
     switch(attitude) {
@@ -189,6 +209,7 @@ float max(float x, float y) {
     return x > y ? x : y;
 }
 
+
 float PWMRestrict(float x) {
     if(x > ccr_min) return ccr_min;
     else if(x < ccr_max) return ccr_max;
@@ -203,8 +224,8 @@ PWMData Add(PWMData pwmData1, PWMData pwmData2) {
 }
 
 void PIDDataRoll(PIDData *pData, float newP) {
-    pData->D = newP - pData->P;
-    pData->I += pData->P;
+    pData->D = (newP - pData->P);
+    pData->I += newP * T_SAMPLE;
     pData->P = newP;
 }
 
@@ -212,7 +233,7 @@ void PIDDataRoll(PIDData *pData, float newP) {
 PIDParam pitchParam = {0, 0, 0}, 
          rollParam  = {0, 0, 0}, 
          yawParam   = {0, 0, 0};
-// internal(anglespeed)     Kp Ki Kd TEMPORARILY ABANDONED 
+// internal(anglespeed)     Kp Ki Kd
 PIDParam pitchSpeedParam = {0, 0, 0}, 
          rollSpeedParam  = {0, 0, 0}, 
          yawSpeedParam   = {0, 0, 0};
@@ -220,16 +241,17 @@ PIDParam pitchSpeedParam = {0, 0, 0},
 PIDData pitchData = {0, 0, 0}, 
         rollData  = {0, 0, 0}, 
         yawData   = {0, 0, 0};
-PIDData pitchSpeedData = {0, 0, 0}, 
+PIDData pitchSpeedData = {0, 0, 0},
         rollSpeedData  = {0, 0, 0}, 
         yawSpeedData   = {0, 0, 0};
 
 int CommandParse(void);
+        
        
 void MotorControl(void* p_arg) {
     CtrlData ctrlData;
     AttdData attdData, tagAttdData;
-    #define ccr_init ((ccr_min + ccr_mid) / 2)
+    #define ccr_init ccr_mid//((ccr_min + ccr_mid) / 2)
     PWMData pwmData = {ccr_init, ccr_init, ccr_init, ccr_init};
     SpeedData speedData;
     float dh;
@@ -241,6 +263,10 @@ void MotorControl(void* p_arg) {
         GetAttdData(&attdData);
         GetReceiverData(&ctrlData);
         GetSpeedData(&speedData);
+        /*
+        sprintf(usart_tx_buf, "[MotorControl] speed = (%.2f, %.2f, %.2f)\r\n", speedData.pitchspeed, speedData.rollspeed, speedData.yawspeed);
+        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+        */
         attdData.pitch = -attdData.pitch;
         tagAttdData.pitch = -(ctrlData.pit - initCtrlData.pit) * 90.0 / 500.0; // ∑˚∫≈Œ Ã‚£ø
         tagAttdData.roll = (ctrlData.rol - initCtrlData.rol) * 90.0 / 500.0;
@@ -266,7 +292,7 @@ void MotorControl(void* p_arg) {
         //printf("[MotorControl] (%.2f, %.2f, %.2f, %.2f)\r\n", tmp.ccr1, tmp.ccr2, tmp.ccr3, tmp.ccr4);
         //printf("pitchPID: %d %d %d\r\n", (int)roundf(pitchParam.Kp * 100.0), (int)roundf(pitchParam.Ki * 100.0), (int)roundf(pitchParam.Kd * 100.0));
         //printf("pitchPID: %.2f %.2f %.2f\r\n", 1.14, 5.14, 1.919);
-        OSTimeDly(50);
+        OSTimeDly((INT32U)(1.0f / T_SAMPLE));
     }
 }
 

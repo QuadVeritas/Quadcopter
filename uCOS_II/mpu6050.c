@@ -13,69 +13,78 @@ float Gyro_Xout_Offset, Gyro_Yout_Offset, Gyro_Zout_Offset;
 float Accel_Xout_Offset, Accel_Yout_Offset, Accel_Zout_Offset;
 
 // Get gyroscope bias
-void Get_Gyro_Bias(void)
+void Get_Gyro_Bias(void* p_arg)
 {
-    uint16_t i;
+    p_arg = p_arg;
     int16_t gyro[3];
-    int32_t gyro_x = 0, gyro_y = 0, gyro_z = 0;
-    static int16_t count = 0;
     uint8_t data_write[6];
+    extern int unlocked;
+    puts("[GyroBias] Start");
+    int cnt = 0;
+    extern char usart_tx_buf[256];
 
-    // Take data 2000 times
-    for(i = 0; i < 2000; i++)
-    {
+    while(1){
+        if(unlocked == 1){
+            Gyro_Xout_Offset /= (float) cnt;
+            Gyro_Yout_Offset /= (float) cnt;
+            Gyro_Zout_Offset /= (float) cnt;
+            puts("[GyroBias] End");
+            /*
+            sprintf(usart_tx_buf, "gx = %.2f, gy = %.2f, gz = %.2f\r\n", Gyro_Xout_Offset, Gyro_Yout_Offset, Gyro_Zout_Offset);
+            USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+            */
+            OSTaskDel(OS_PRIO_SELF);
+        }
+        OSTimeDly(50);
         if(!i2cread(MPU6050_Addr2, GYRO_XOUT_H, 6, data_write))
         {
             // Get xyz angular velocity
             gyro[0] = ((((int16_t)data_write[0])<<8) | data_write[1]);
             gyro[1] = ((((int16_t)data_write[2])<<8) | data_write[3]);
             gyro[2] = ((((int16_t)data_write[4])<<8) | data_write[5]);
-            gyro_x += gyro[0];
-            gyro_y += gyro[1];
-            gyro_z += gyro[2];
-            // Record valid count
-            count++;
+            Gyro_Xout_Offset = (Gyro_Xout_Offset + gyro[0]);
+            Gyro_Yout_Offset = (Gyro_Yout_Offset + gyro[1]);
+            Gyro_Zout_Offset = (Gyro_Zout_Offset + gyro[2]);
+            cnt++;
         }
     }
-
-    // Average the value to get the zero drift offset
-    Gyro_Xout_Offset = (float)gyro_x / count;
-    Gyro_Yout_Offset = (float)gyro_y / count;
-    Gyro_Zout_Offset = (float)gyro_z / count;
 }
 
 // Get accelerometer bias
-void Get_Accel_Bias(void)
-{
-    uint32_t i;
+void Get_Accel_Bias(void* p_arg) {
+    p_arg = p_arg;
     int16_t accel[3]; 
     uint8_t data_write[6];
-    float accel_x = 0, accel_y = 0, accel_z = 0;
-    static int16_t count2 = 0;
+    extern int unlocked;
+    puts("[AccelBias] Start");
+    int cnt = 0;
+    extern char usart_tx_buf[256];
 
-    // Take data 2000 times
-    for(i = 0; i < 2000; i++)
-    {
+    while(1){
+        if(unlocked == 1){
+            Accel_Xout_Offset /= (float) cnt;
+            Accel_Yout_Offset /= (float) cnt;
+            Accel_Zout_Offset /= (float) cnt;
+            puts("[AccelBias] End");
+            /*
+            sprintf(usart_tx_buf, "ax = %.2f, ay = %.2f, az = %.2f\r\n", Accel_Xout_Offset, Accel_Yout_Offset, Accel_Zout_Offset);
+            USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+            */
+            OSTaskDel(OS_PRIO_SELF);
+        }
+        OSTimeDly(50);
         if(!i2cread(MPU6050_Addr2, ACCEL_XOUT_H, 14, data_write))
         {
             // Get xyz acceleration
             accel[0] = (((int16_t)data_write[0])<<8) | data_write[1];
             accel[1] = (((int16_t)data_write[2])<<8) | data_write[3];
             accel[2] = (((int16_t)data_write[4])<<8) | data_write[5];
-            accel_x += accel[0];
-            accel_y += accel[1];
-            accel_z += accel[2];
-            // Record valid count
-            count2++;
+            Accel_Xout_Offset = (Accel_Xout_Offset + accel[0]);
+            Accel_Yout_Offset = (Accel_Yout_Offset + accel[1]);
+            Accel_Zout_Offset = (Accel_Zout_Offset + accel[2]);
+            cnt++;
         }
     }
-
-    // Average the value to get the zero drift offset
-    Accel_Xout_Offset = (float)accel_x / count2;
-    Accel_Yout_Offset = (float)accel_y / count2;
-    Accel_Zout_Offset = (float)accel_z / count2;
-    
-    
 }
 
 // MPU6050 initialization
@@ -99,14 +108,11 @@ void MPU6050_Init(void)
     // Set the accelerometer acquisition range to +-4g
     I2C_WriteByte(MPU6050_Addr, ACCEL_CONFIG, 0x08);
 
+    /*
     // Get the zero drift offset
     Get_Gyro_Bias();
     Get_Accel_Bias();
-    
-    #ifdef AHRS_DEBUG
-        printf("%d, %d, %d\r\n", (int)Gyro_Xout_Offset * 100, (int)Gyro_Yout_Offset * 100, (int)Gyro_Zout_Offset * 100);
-        //printf("%.2f, %.2f, %.2f\r\n", init_ax, init_ay, init_az);
-    #endif
+    */
 }
 
 // HMC5883L initialization

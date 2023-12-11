@@ -96,6 +96,8 @@ void GY86_Output(void *);
 void Receiver_Output(void*);
 void MotorControl(void*);
 void ListenPID(void*);
+void Get_Gyro_Bias(void*);
+void Get_Accel_Bias(void*);
 
 void USART1_SEND_BUF_U8(u8* buf,u8 len);
 void SEND_OULA_ANGLE(short row,short pit,short yaw);

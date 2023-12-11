@@ -5,13 +5,6 @@ void delay_us(int nus){
     for(i = 0; i < nus; ++i);
 }
 
-void GY86_Init(void) {
-    I2C1_Init();
-    MPU6050_Init();
-    HMC5883L_Init();
-    AHRS_Time_Init();
-    Quat_Init();
-}
 
 #ifdef AHRS
 
@@ -25,17 +18,17 @@ int GetAttdData(AttdData* pAttdData) {
     return 0;
 }
 
+    extern float Gyro_Xout_Offset, Gyro_Yout_Offset, Gyro_Zout_Offset;
 int GetSpeedData(SpeedData* pSpeedData) {
-    float Gyro_Xout_Offset, Gyro_Yout_Offset, Gyro_Zout_Offset;
     short pittmp, roltmp, yawtmp;
     uint8_t data_write[14];
     if(!i2cread(MPU6050_Addr2, ACCEL_XOUT_H, 14, data_write)){
-        pittmp = -(((int16_t)data_write[8])<<8) | data_write[9];
-        roltmp = -(((int16_t)data_write[10])<<8) | data_write[11];
-        yawtmp  = (((int16_t)data_write[12])<<8) | data_write[13];
-        pSpeedData->pitchspeed = ((float)pittmp - Gyro_Xout_Offset) / Gyro_500_Scale_Factor / ARC_TO_DEG;
-        pSpeedData->rollspeed = ((float)roltmp - Gyro_Yout_Offset) / Gyro_500_Scale_Factor / ARC_TO_DEG;
-        pSpeedData->yawspeed = ((float)yawtmp - Gyro_Zout_Offset) / Gyro_500_Scale_Factor / ARC_TO_DEG;
+        pittmp = (((int16_t)data_write[8])<<8) | data_write[9];
+        roltmp = (((int16_t)data_write[10])<<8) | data_write[11];
+        yawtmp = (((int16_t)data_write[12])<<8) | data_write[13];
+        pSpeedData->pitchspeed = -((float)pittmp - Gyro_Xout_Offset) / Gyro_500_Scale_Factor;
+        pSpeedData->rollspeed = ((float)roltmp - Gyro_Yout_Offset) / Gyro_500_Scale_Factor;
+        pSpeedData->yawspeed = ((float)yawtmp - Gyro_Zout_Offset) / Gyro_500_Scale_Factor;
         return 0;
     }
     return -1;
