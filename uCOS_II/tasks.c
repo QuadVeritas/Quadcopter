@@ -182,20 +182,14 @@ PWMData PIDOutput(PIDData* pExtData, PIDParam extParam, PIDData* pIntData, PIDPa
     //OS_CPU_SR cpu_sr;
     //OS_ENTER_CRITICAL();
     /*
-    cnt++;
-    if(cnt == 10) {
-    */
-        sprintf(usart_tx_buf, "[PIDCalc] extP = %.2f, intP = %.2f, res = %.2f\r\n", pExtData->P, pIntData->P, res);
-        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
-    /*
-        cnt = 0;
-    }
+    sprintf(usart_tx_buf, "[PIDCalc] extP = %.2f, intP = %.2f, res = %.2f\r\n", pExtData->P, pIntData->P, res);
+    USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
     */
     //printf("[PIDCalc] extP = %.2f, res = %.2f, intP = %.2f\r\n", pExtData->P, res, pIntData->P);
     //OS_EXIT_CRITICAL();
     switch(attitude) {
-        case PITCH: return (PWMData) {-res, -res, +res, +res};
-        case ROLL:  return (PWMData) {-res, +res, -res, +res};
+        case PITCH: return (PWMData) {-0.707 * res, -0.707 * res, +0.707 * res, +0.707 * res};
+        case ROLL:  return (PWMData) {-0.707 * res, +0.707 * res, -0.707 * res, +0.707 * res};
         case YAW:   return (PWMData) {-res, +res, +res, -res};
         default:    return (PWMData) {0, 0, 0, 0};
     }
@@ -230,12 +224,12 @@ void PIDDataRoll(PIDData *pData, float newP) {
 }
 
 // external(angle)     Kp Ki Kd
-PIDParam pitchParam = {0, 0, 0}, 
-         rollParam  = {0, 0, 0}, 
+PIDParam pitchParam = {-3.5, 0, 0}, 
+         rollParam  = {3.5, 0, 0}, 
          yawParam   = {0, 0, 0};
 // internal(anglespeed)     Kp Ki Kd
-PIDParam pitchSpeedParam = {0, 0, 0}, 
-         rollSpeedParam  = {0, 0, 0}, 
+PIDParam pitchSpeedParam = {0.7, 0, 0.5}, 
+         rollSpeedParam  = {-0.7, 0, -0.5}, 
          yawSpeedParam   = {0, 0, 0};
        
 PIDData pitchData = {0, 0, 0}, 
@@ -246,7 +240,9 @@ PIDData pitchSpeedData = {0, 0, 0},
         yawSpeedData   = {0, 0, 0};
 
 int CommandParse(void);
-        
+
+float yawDrawback = 0.0f;
+float stdYaw = 0.0f;
        
 void MotorControl(void* p_arg) {
     CtrlData ctrlData;
@@ -263,31 +259,48 @@ void MotorControl(void* p_arg) {
         GetAttdData(&attdData);
         GetReceiverData(&ctrlData);
         GetSpeedData(&speedData);
-        /*
-        sprintf(usart_tx_buf, "[MotorControl] speed = (%.2f, %.2f, %.2f)\r\n", speedData.pitchspeed, speedData.rollspeed, speedData.yawspeed);
-        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
-        */
+        
+        if(stdYaw > -0.1f && stdYaw < 0.1f) {
+            stdYaw = attdData.yaw;
+        }
+        
+        attdData.yaw -= yawDrawback;
+        speedData.yawspeed -= yawDrawback / T_SAMPLE;
+        yawDrawback += 0.00025f;
+        
         attdData.pitch = -attdData.pitch;
-        tagAttdData.pitch = -(ctrlData.pit - initCtrlData.pit) * 90.0 / 500.0; // 符号问题？
-        tagAttdData.roll = (ctrlData.rol - initCtrlData.rol) * 90.0 / 500.0;
-        tagAttdData.yaw = (ctrlData.yaw - initCtrlData.yaw) * 180.0 / 500.0;
+        tagAttdData.pitch = -(ctrlData.pit - initCtrlData.pit) * 90.0 / 1000.0; // 符号问题？
+        tagAttdData.roll = (ctrlData.rol - initCtrlData.rol) * 90.0 / 1000.0;
+        tagAttdData.yaw = stdYaw;//(ctrlData.yaw - initCtrlData.yaw) * 180.0 / 1000.0;
+        
         dh = (ctrlData.pwr - initCtrlData.pwr) * (ccr_min - ccr_max) / 1000.0;
+        
         PIDDataRoll(&pitchData, attdData.pitch - tagAttdData.pitch);
         PIDDataRoll(&rollData,  attdData.roll - tagAttdData.roll);
         PIDDataRoll(&yawData,   attdData.yaw - tagAttdData.yaw);
+        
+        sprintf(usart_tx_buf, "[MtrCtrl]%.2f,%.2f,%.2f\r\n", tagAttdData.pitch, tagAttdData.roll, tagAttdData.yaw);
+        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+        
         PIDDataRoll(&pitchSpeedData, speedData.pitchspeed);
         PIDDataRoll(&rollSpeedData,  speedData.rollspeed);
         PIDDataRoll(&yawSpeedData,   speedData.yawspeed);
         
         PWMData pitchPWMData = PIDOutput(&pitchData, pitchParam, &pitchSpeedData, pitchSpeedParam, PITCH);
-//        PWMData rollPWMData = PIDOutput(&rollData, rollParam, &rollSpeedData, rollSpeedParam, ROLL);
-//        PWMData yawPWMData = PIDOutput(&yawData, yawParam, &yawSpeedData, yawSpeedParam, YAW);
+        PWMData rollPWMData = PIDOutput(&rollData, rollParam, &rollSpeedData, rollSpeedParam, ROLL);
+        PWMData yawPWMData = PIDOutput(&yawData, yawParam, &yawSpeedData, yawSpeedParam, YAW);
         PWMData pwrPWMData = (PWMData) {-dh, -dh, -dh, -dh};
 //        pwmData = Add(Add(Add(pwmData, pitchPWMData), Add(rollPWMData, yawPWMData)), pwrPWMData);
         
-        PWMData tmp = Add(Add(pwmData, pitchPWMData), pwrPWMData);
+        //PWMData tmp = Add(Add(pwmData, yawPWMData), pwrPWMData);
+        PWMData tmp = Add(Add(Add(Add(pwmData, pwrPWMData), pitchPWMData), rollPWMData), yawPWMData);
         //PWMData tmp = Add(pwmData, pwrPWMData);
         SetCCR(tmp);
+        /*
+        sprintf(usart_tx_buf, "[MtrCtrl](%.2f, %.2f, %.2f)(%d, %d, %d, %d)\r\n", attdData.pitch, attdData.roll, attdData.yaw
+                                                                            , TIM3->CCR1, TIM3->CCR2, TIM3->CCR3, TIM3->CCR4);
+        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
+        */
         //printf("pitv=%d rolv=%d yawv=%d\r\r\n", speedData.pitchspeed, speedData.rollspeed, speedData.yawspeed);
         //printf("[MotorControl] (%.2f, %.2f, %.2f, %.2f)\r\n", tmp.ccr1, tmp.ccr2, tmp.ccr3, tmp.ccr4);
         //printf("pitchPID: %d %d %d\r\n", (int)roundf(pitchParam.Kp * 100.0), (int)roundf(pitchParam.Ki * 100.0), (int)roundf(pitchParam.Kd * 100.0));
