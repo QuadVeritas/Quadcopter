@@ -131,17 +131,19 @@ void AHRS_Update(float gx, float gy, float gz, float ax, float ay, float az, flo
 
     halfT = Get_AHRS_Time();
 
-    
-    // integral error scaled integral gain
-    exInt = exInt + ex*Ki ;
-    eyInt = eyInt + ey*Ki ;
-    ezInt = ezInt + ez*Ki ;
+    /*
+    if(ex != 0.0f && ey != 0.0f && ez != 0.0f) {
+    */
+        // integral error scaled integral gain
+        exInt = exInt + ex*Ki ;
+        eyInt = eyInt + ey*Ki ;
+        ezInt = ezInt + ez*Ki ;
 
-    // adjusted gyroscope measurements
-    gx = gx + Kp*ex + exInt;
-    gy = gy + Kp*ey + eyInt;
-    gz = gz + Kp*ez + ezInt;
-    
+        // adjusted gyroscope measurements
+        gx = gx + Kp*ex + exInt;
+        gy = gy + Kp*ey + eyInt;
+        gz = gz + Kp*ez + ezInt;
+    //}
 
     // save quaternion
     q0_last = q0;

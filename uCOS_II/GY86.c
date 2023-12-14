@@ -11,6 +11,9 @@ void delay_us(int nus){
 int GetAttdData(AttdData* pAttdData) {
     extern float Pitch, Roll, Yaw;
     Get_AHRS_Data();
+    if(fabs(init_gx) < 0.002f) init_gx = 0.0f;
+    if(fabs(init_gy) < 0.01f) init_gy = 0.0f;
+    if(fabs(init_gz) < 0.01f) init_gz = 0.0f;
     AHRS_Update(init_gx, init_gy, init_gz, init_ax, init_ay, init_az, init_mx, init_my, init_mz);
     pAttdData->pitch = Pitch;
     pAttdData->roll = Roll;

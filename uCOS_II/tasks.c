@@ -263,11 +263,11 @@ void MotorControl(void* p_arg) {
         if(stdYaw > -0.1f && stdYaw < 0.1f) {
             stdYaw = attdData.yaw;
         }
-        
+        /*
         attdData.yaw -= yawDrawback;
         speedData.yawspeed -= yawDrawback / T_SAMPLE;
         yawDrawback += 0.00025f;
-        
+        */
         attdData.pitch = -attdData.pitch;
         tagAttdData.pitch = -(ctrlData.pit - initCtrlData.pit) * 90.0 / 1000.0; // ·ûºÅÎÊÌâ£¿
         tagAttdData.roll = (ctrlData.rol - initCtrlData.rol) * 90.0 / 1000.0;
@@ -278,9 +278,6 @@ void MotorControl(void* p_arg) {
         PIDDataRoll(&pitchData, attdData.pitch - tagAttdData.pitch);
         PIDDataRoll(&rollData,  attdData.roll - tagAttdData.roll);
         PIDDataRoll(&yawData,   attdData.yaw - tagAttdData.yaw);
-        
-        sprintf(usart_tx_buf, "[MtrCtrl]%.2f,%.2f,%.2f\r\n", tagAttdData.pitch, tagAttdData.roll, tagAttdData.yaw);
-        USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
         
         PIDDataRoll(&pitchSpeedData, speedData.pitchspeed);
         PIDDataRoll(&rollSpeedData,  speedData.rollspeed);
@@ -296,11 +293,11 @@ void MotorControl(void* p_arg) {
         PWMData tmp = Add(Add(Add(Add(pwmData, pwrPWMData), pitchPWMData), rollPWMData), yawPWMData);
         //PWMData tmp = Add(pwmData, pwrPWMData);
         SetCCR(tmp);
-        /*
+        
         sprintf(usart_tx_buf, "[MtrCtrl](%.2f, %.2f, %.2f)(%d, %d, %d, %d)\r\n", attdData.pitch, attdData.roll, attdData.yaw
                                                                             , TIM3->CCR1, TIM3->CCR2, TIM3->CCR3, TIM3->CCR4);
         USART1_SEND_BUF_U8((u8*)usart_tx_buf, strlen(usart_tx_buf));
-        */
+        
         //printf("pitv=%d rolv=%d yawv=%d\r\r\n", speedData.pitchspeed, speedData.rollspeed, speedData.yawspeed);
         //printf("[MotorControl] (%.2f, %.2f, %.2f, %.2f)\r\n", tmp.ccr1, tmp.ccr2, tmp.ccr3, tmp.ccr4);
         //printf("pitchPID: %d %d %d\r\n", (int)roundf(pitchParam.Kp * 100.0), (int)roundf(pitchParam.Ki * 100.0), (int)roundf(pitchParam.Kd * 100.0));
